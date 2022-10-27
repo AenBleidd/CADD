@@ -45,6 +45,7 @@ import tkMessageBox as tmb
 import tkFileDialog as tfd
 import platform
 import paramiko as pmk
+import CADD.Raccoon2.BoincClient as BoincClient
 try:
     from multiprocessing import cpu_count
 except:
@@ -821,6 +822,7 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
 
     def setBoincResource(self):
         #print "setupTab> set resource gui to BOINC |",
+        self.boincService = BoincClient.BoincService()
         self.resetFrame()
         self._makeboincpanel()
         self.frame.pack(expand=1, fill='both')
@@ -839,22 +841,30 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
         # address
         f = tk.Frame(f1)
         tk.Label(f, text='Address:', anchor='e', width=14, font=self.FONT).pack(anchor='w', side='left')
-        self.info_boinc_address = Pmw.EntryField( f, value='https://boinc.berkeley.edu/central/', validate = {'validator': hf.validateHostname, 'min':1,'minstrict':0},entry_width=30, entry_font = self.FONT)
+        self.info_boinc_address = Pmw.EntryField( f, value='https://boinc.berkeley.edu/central/', validate = {'min':1,'minstrict':0},entry_width=30, entry_font = self.FONT)
         self.info_boinc_address.pack(anchor='w', side='left', expand=1, fill='x')
         f.pack(side = 'top', expand=0, fill='x', anchor='w',pady=4,padx=3)
 
-        # username
+        # email
         f = tk.Frame(f1)
-        tk.Label(f, text='Username:', anchor='e', width=14, font=self.FONT).pack(anchor='w', side='left')
-        self.info_boinc_username = Pmw.EntryField( f, validate = {'min':1,'minstrict':0}, entry_width=30, entry_font = self.FONT)
-        self.info_boinc_username.pack(anchor='w', side='left', expand=1, fill='x')
+        tk.Label(f, text='E-Mail:', anchor='e', width=14, font=self.FONT).pack(anchor='w', side='left')
+        self.info_boinc_email = Pmw.EntryField( f, validate = {'min':1,'minstrict':0}, entry_width=30, entry_font = self.FONT)
+        self.info_boinc_email.pack(anchor='w', side='left', expand=1, fill='x')
         f.pack(side = 'top', expand=0, fill='x', anchor='w',pady=4,padx=3)
 
         # password:
         f = tk.Frame(f1)
-        tk.Label(f, text='Password:', anchor='e', width=14,font=self.FONT).pack(anchor='w', side='left')
+        tk.Label(f, text='Password:', anchor='e', width=14, font=self.FONT).pack(anchor='w', side='left')
         self.info_boinc_password = Pmw.EntryField( f, entry_show='*', validate = {'min':1,'minstrict':0}, entry_width=30, entry_font = self.FONT)
         self.info_boinc_password.pack(anchor='w', side='left', expand=1, fill='x')
+        f.pack(side = 'top', expand=0, fill='x', anchor='w',pady=4,padx=3)
+
+        # authenticate:
+        f = tk.Frame(f1)
+        tk.Button(f, text='Authenticate', width=14, command=self._boinc_authenticate, compound=None, font=self.FONT, **self.BORDER).pack(anchor='w', side='left')
+        self.info_boinc_status = tk.StringVar()
+        self.info_boinc_status.set('Not authenticated')
+        tk.Label(f, textvariable=self.info_boinc_status, width=30, font=self.FONT).pack(anchor='w', side='left')
         f.pack(side = 'top', expand=0, fill='x', anchor='w',pady=4,padx=3)
 
         f1.pack(side='left', anchor='n', expand=0, fill='none')
@@ -865,6 +875,11 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self.frame.pack(expand=1, fill='both')
         #print "Raccoon GUI resource:", self.app.resource
 
+    def _boinc_authenticate(self):
+        """ authenticate with boinc server
+        """
+        status = self.boincService.authenticate(self.info_boinc_address.get(), self.info_boinc_email.get(), self.info_boinc_password.get())
+        self.info_boinc_status.set(status)
 
 class PasswordPromptWin(rb.RaccoonDefaultWidget, DebugObj):
     """prompt the password and show some info if necessary..."""
