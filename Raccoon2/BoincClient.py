@@ -37,7 +37,7 @@ class BoincService:
             if handler.authenticator is None:
                 return "Error", None
 
-            return "Success", handler.authenticator
+            return "Authenticated successfully", handler.authenticator
 
         return "ERROR: " + data, None
 
