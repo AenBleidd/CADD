@@ -130,7 +130,7 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self.b3.pack(side='left')
         self.b3.configure(width=128, state='disabled')
 
-        self.b4 = tk.Radiobutton(frame, text='   BOINC\n   server', variable=self._res_var, image = self._ICON_boinc,
+        self.b4 = tk.Radiobutton(frame, text='   BOINC\n   network', variable=self._res_var, image = self._ICON_boinc,
             compound='left', value='boinc', command=self.setResource_cb, indicatoron=False, **self.BORDER)
         self.b4.pack(side='left')
         self.b4.configure(width=128)
