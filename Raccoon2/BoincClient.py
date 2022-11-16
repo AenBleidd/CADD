@@ -18,9 +18,9 @@ class BoincService:
             return "ERROR"
 
         self._server = server
-        result, self._authenticator = self._boincAuth(email, passwd)
+        success, result, self._authenticator = self._boincAuth(email, passwd)
 
-        return result
+        return success, result
 
     def _boincAuth(self, email, passwd):
         """ authenticate the user with the BOINC service """
@@ -35,11 +35,11 @@ class BoincService:
             handler = RpcAccountOutHandler()
             self._parse_xml_reply(data, handler)
             if handler.authenticator is None:
-                return "Error", None
+                return False, "Error", None
 
-            return "Authenticated successfully", handler.authenticator
+            return True, "Authenticated successfully", handler.authenticator
 
-        return "ERROR: " + data, None
+        return False, "Error: " + data, None
 
     def _do_request(self, url, params):
         """ do a request to the BOINC service """

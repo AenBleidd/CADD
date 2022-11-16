@@ -831,6 +831,16 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
     def _makeboincpanel(self):
         """ create a panel for boinc resources
         """
+        boinc_settings = self.app.settings['boinc']
+        saved_address = ''
+        saved_email = ''
+        for k in boinc_settings.keys():
+            if k == 'address':
+                saved_address = boinc_settings[k]
+            elif k == 'email':
+                saved_email = boinc_settings[k]
+        if saved_address == '':
+            saved_address = 'https://boinc.berkeley.edu/central/'
         ### info panel
         group = Pmw.Group(self.frame, tag_text = 'Server', tag_font=self.FONTbold)
         g = group.interior()
@@ -841,14 +851,14 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
         # address
         f = tk.Frame(f1)
         tk.Label(f, text='Address:', anchor='e', width=14, font=self.FONT).pack(anchor='w', side='left')
-        self.info_boinc_address = Pmw.EntryField( f, value='https://boinc.berkeley.edu/central/', validate = {'min':1,'minstrict':0},entry_width=30, entry_font = self.FONT)
+        self.info_boinc_address = Pmw.EntryField( f, value=saved_address, validate = {'min':1,'minstrict':0},entry_width=30, entry_font = self.FONT)
         self.info_boinc_address.pack(anchor='w', side='left', expand=1, fill='x')
         f.pack(side = 'top', expand=0, fill='x', anchor='w',pady=4,padx=3)
 
         # email
         f = tk.Frame(f1)
         tk.Label(f, text='E-Mail:', anchor='e', width=14, font=self.FONT).pack(anchor='w', side='left')
-        self.info_boinc_email = Pmw.EntryField( f, validate = {'min':1,'minstrict':0}, entry_width=30, entry_font = self.FONT)
+        self.info_boinc_email = Pmw.EntryField( f, value=saved_email, validate = {'min':1,'minstrict':0}, entry_width=30, entry_font = self.FONT)
         self.info_boinc_email.pack(anchor='w', side='left', expand=1, fill='x')
         f.pack(side = 'top', expand=0, fill='x', anchor='w',pady=4,padx=3)
 
@@ -878,8 +888,12 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
     def _boinc_authenticate(self):
         """ authenticate with boinc server
         """
-        status = self.boincService.authenticate(self.info_boinc_address.get(), self.info_boinc_email.get(), self.info_boinc_password.get())
+        success, status = self.boincService.authenticate(self.info_boinc_address.get(), self.info_boinc_email.get(), self.info_boinc_password.get())
         self.info_boinc_status.set(status)
+        if success:
+            self.app.settings['boinc']['address'] = self.info_boinc_address.get()
+            self.app.settings['boinc']['email'] = self.info_boinc_email.get()
+            self.app.saveBoincInfo()
 
 class PasswordPromptWin(rb.RaccoonDefaultWidget, DebugObj):
     """prompt the password and show some info if necessary..."""
