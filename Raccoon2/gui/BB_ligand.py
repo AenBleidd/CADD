@@ -84,6 +84,9 @@ class LigandTab(rb.TabBase, rb.RaccoonDefaultWidget):
         f = icon_path + os.sep + 'remove.png'
         self._ICON_remove = ImageTk.PhotoImage(Image.open(f))
 
+        f = icon_path + os.sep + 'open.png'
+        self._ICON_open = ImageTk.PhotoImage(Image.open(f))
+
 
     def handleResource(self, event=None):
         self.setResource(event.resource)
@@ -110,6 +113,8 @@ class LigandTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self.setClusterResource()
         elif resource == 'opal':
             self.setOpalResource()
+        elif resource == 'boinc':
+            self.setBoincResource()
 
 
     def setLocalResource(self):
@@ -127,6 +132,220 @@ class LigandTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self.resetFrame()
         pass
 
+    def setBoincResource(self):
+        """ """
+        bset = { 'bg' : '#969b9d'  } # 'width' : 22, 'height': 22, 'relief' : 'raised'}
+        bset = {}
+        bset.update(self.BORDER)
+        self.resetFrame()
+        self.ligGroup = Pmw.Group(self.frame, tag_text = 'Accepted structures [ 0 ]', tag_font = self.FONTbold)
+
+        # toolbar
+        toolb = tk.Frame(self.ligGroup.interior())
+
+        if self.sysarch == 'Windows':
+            bwidth = 54
+        else:
+            bwidth = 32
+        ###### add button
+        # make button
+        b = tk.Button(toolb, text='Add...', compound='top', image = self._ICON_add, width=bwidth, font=self.FONTbold, **bset )
+        b.pack(anchor='n', side='top')
+        # make menu items
+        addlig_items = [ ['Add ligands'],
+                         ['Import files...', 'normal', self.openfiles],
+                         [],
+                         ['Scan directory...', 'normal', self.open_dirs],
+                         ['Scan directory (recursively)...', 'normal', self.opendir_recursive],
+                         ]
+        # make menu
+        menu = rb.RacMenu(b, addlig_items, toolbar=toolb)
+
+        ###### add button
+        # make button
+        b = tk.Button(toolb, text='Remove...', compound='top', image = self._ICON_remove, width=bwidth, font=self.FONTbold, **bset )
+        b.pack(anchor='n', side='top', pady=1)
+        # make menu items
+        addlig_items = [ ['Remove ligands'],
+                         ['Remove selected', 'normal', self.deletefiles],
+                         ['Remove all', 'normal', self.deleteallfiles],
+                         ]
+        # make menu
+        menu = rb.RacMenu(b, addlig_items, toolbar=toolb)
+        #
+        toolb.pack(side='left', anchor='w', expand=0, fill='y',pady=0)
+
+        # files manager
+        self.ligFileManager = TkTreectrl.ScrolledMultiListbox(self.ligGroup.interior(), bd=2)
+        self.ligFileManager.listbox.config(bg='white', fg='black', font=self.FONT,
+                   columns = ('name', 'heavy', 'hba', 'hbd', 'mw', 'tors', 'atypes', 'filename'),
+                   selectmode='extended',
+                              )
+        delkey = CallbackFunction(self.deletefiles, {'nuke':False})
+        self.ligFileManager.listbox.bind('<Delete>', delkey)
+
+        self.ligFileManager.pack(anchor='w', side='left', expand=1, fill='both')
+
+        self.ligGroup.pack(anchor='n', side='top', expand=1, fill='both')
+
+        self.frame.pack(expand=1, fill='both',anchor='n', side='top')
+
+    def openfiles(self, event=None, files = [], quiet=False):
+        """ add files"""
+        title = 'Select one or more ligand files...'
+        filetypes = [("Supported ligand formats", ("*.pdbqt","*.PDBQT" )),
+                     ("PDBQT", ("*.pdbqt", "*.PDBQT")), ("Any file type...", "*")]
+        files = tfd.askopenfilename(parent=self.frame, title = title,
+            filetypes = filetypes, multiple = 1)
+        files = self._listfixer(files)
+        if len(files):
+            self._file_checker(files)
+
+    def open_dirs(self,event=None, recursive=False):
+        """ scan dir(s) optionally recursively"""
+        title = 'Select a directory to scan'
+        if recursive:
+            title += ' recursively'
+        dirname = tfd.askdirectory(parent=self.frame, title = title, mustexist=True)
+        if dirname:
+            m = ('Scanning path: %s' % dirname)
+            files = []
+            func = hf.pathToList
+            func_kwargs = {'path':dirname, 'pattern' :'*.pdbqt', 'recursive' : recursive}
+            progressWin = rb.ProgressDialogWindowTk(parent= self.frame,
+                function = func, func_kwargs = func_kwargs, title ='Searching for ligands',
+                    message = m, operation = 'ligands scanning',image = self._ICON_open, autoclose=True)
+            progressWin.start()
+            files = progressWin.getResults()
+            if files == []:
+                t = 'Searching for ligands'
+                m = ('No files found.')
+                i = 'info'
+                tmb.showinfo(parent=self.frame, title=t, message=m, icon=i)
+                return
+            if progressWin._STOP or not progressWin._COMPLETED:
+                t = 'Searching for ligands'
+                m = ('The ligand search has not been completed.\n'
+                     'Do you want to process %d files found so far?')
+                m = m % len(files)
+                i = 'info'
+                if not tmb.askyesno(parent=self.frame, title=t, message=m, icon=i):
+                    return
+            self._file_checker(files)
+
+    def opendir_recursive(self, event=None):
+        """ """
+        self.open_dirs(recursive=True)
+
+    def deletefiles(self, nuke=False, event=None):
+        if nuke == True:
+            # EVENT UPDATES
+            self.app.engine.removeLigands()
+            self.ligFileManager.listbox.delete(0,'end')
+            self.updateligcount()
+        else:
+            try:
+                s = self.ligFileManager.listbox.curselection()[0]
+                sel = self.ligFileManager.listbox.get(s)[0]
+            except:
+                return
+            name = sel[0]
+            self.app.engine.removeLigands([name])
+            self.ligFileManager.listbox.delete(s)
+        self.updateligcount()
+
+    def deleteallfiles(self):
+        c = len(self.app.engine.LigBook.keys())
+        if c == 0:
+            return
+        t = 'Warning'
+        m = 'All %d ligands are going to be deleted\n\nAre you sure?' % c
+        if not tmb.askyesno(parent=self.frame, title=t, message=m, icon='warning'):
+            return
+        self.deletefiles(nuke=True)
+
+    def updateligcount(self):
+        # update the count of accepted ligands
+        msg = 'Accepted structures [ %s ]' % len(self.app.engine.LigBook)
+        self.ligGroup.configure(tag_text = msg)
+
+    def addfiles(self, accepted):
+        for lig in accepted:
+            l = lig[1]
+            lig_data = self.app.engine.LigBook[l]
+            atypes = ",".join(sorted(lig_data['atypes']))
+            self.ligFileManager.listbox.insert('END', lig_data['name'],  lig_data['nat'],
+                    lig_data['hba'], lig_data['hbd'], lig_data['mw'], lig_data['tors'],
+                    atypes, lig_data['filename'])
+        self.updateligcount()
+
+    def _file_checker(self, flist):
+        """query the Raccoon engine to check if files are acceptable
+            and generate a minireport...?
+
+            then proceed to adding them to the list
+        """
+        table = { 'rec' : 'receptors', 'lig' : 'ligands', 'flex' : 'flex.residues',
+            'error' : 'errors/duplicates', 'result' : 'result files', 'empty' : 'empty file'}
+        if not flist:
+            return
+        func = self.app.engine.addLigandList
+        func_kwargs = {'filelist': flist }
+        m = ('Checking %s potential ligands...' % len(flist))
+        progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
+                function = func, func_kwargs = func_kwargs,
+                title ='Importing ligands', message = m,
+                operation = 'checking ligand files',
+                image = self._ICON_open, autoclose=True, progresstype='percent')
+        progressWin.start()
+        response = progressWin.getOutput()
+        if response == None:
+            t = 'No ligands'
+            m = ('No ligands have been found')
+            i = 'info'
+            tmb.showinfo(parent=self.parent, title=t, message=m, icon=i)
+            return
+        if progressWin._STOP or (not progressWin._COMPLETED):
+            if not len(response['accepted']):
+                return
+            t = 'Importing ligands'
+            m = ('The ligand checking has not been completed.\n'
+                 'Do you want to process %d ligands found so far?')
+            m = m % len(response['accepted'])
+            i = 'info'
+            if not tmb.askyesno(parent=self.parent, title=t, message=m, icon=i):
+                return
+        accepted = response['accepted']
+        self.addfiles(accepted)
+        # for f in accepted:
+        #     self._register[f[0]] = f[1] # RaccoonEngine.addLigandList -> accepted.append(f, response['name'])
+        rejected = response['rejected']
+        def close(event=None):
+            win.destroy()
+        win = Pmw.Dialog(self.frame, title='Report',
+            buttons = ('Close',), command = close)
+        bbox = win.component('buttonbox')
+        for i in range(bbox.numbuttons()):
+            bbox.button(i).configure(font=self.FONT, default='disabled', **self.BORDER)
+        w = tk.Frame(win.interior(), bg='white', **self.BORDER)
+        tk.Label(w, text='Accepted :', justify='left',anchor='e', font=self.FONTbold,
+            bg='white').grid(row = 1, column = 1, sticky='we')
+        tk.Label(w, text=len(accepted), justify='left', font=self.FONT, bg='white',
+            anchor='e').grid(row = 1, column = 2, sticky='we')
+        tk.Frame(w,height=2,width=1,bd=1,relief='sunken').grid(row=3,column=0,sticky='we',
+            columnspan=13)
+        tk.Label(w, text='Problematic ', justify='left',anchor='e', font=self.FONTbold,
+            bg='white').grid(row = 4, column = 1, sticky='we')
+        r = 5
+        for e in rejected.keys():
+            msg = table.get(e, 'unknown')
+            tk.Label(w, text=msg+" :", justify='left', anchor='e',font=self.FONT,
+                bg='white').grid(row = r, column = 1, sticky='we')
+            tk.Label(w, text=len(rejected[e]), justify='left', font=self.FONT,
+                bg='white').grid(row = r, column = 2, sticky='we')
+            r+=1
+        w.pack(expand=1,fill='both', padx=10, pady=10, ipadx=5, ipady=5)
+        win.activate()
 
     def _makeclustliglibrary(self):
         """ """
