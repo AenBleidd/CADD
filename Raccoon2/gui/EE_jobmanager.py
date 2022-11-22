@@ -1,17 +1,17 @@
-#       
+#
 #           AutoDock | Raccoon2
 #
 #       Copyright 2013, Stefano Forli
 #          Molecular Graphics Lab
-#  
-#     The Scripps Research Institute 
-#           _  
+#
+#     The Scripps Research Institute
+#           _
 #          (,)  T  h e
 #         _/
 #        (.)    S  c r i p p s
 #          \_
 #          (,)  R  e s e a r c h
-#         ./  
+#         ./
 #        ( )    I  n s t i t u t e
 #         '
 #
@@ -46,13 +46,13 @@ from PIL import Image, ImageTk
 from mglutil.events import Event, EventHandler
 from mglutil.util.callback import CallbackFunction # as cb
 
-#import EF_resultprocessor 
+#import EF_resultprocessor
 
 
 
 class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
     """ populate and manage the job manager tab """
-    
+
     def __init__(self, app, parent, debug=False):
         # get
         rb.TabBase.__init__(self, app, debug)
@@ -63,14 +63,13 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self.app.eventManager.registerListener(RaccoonEvents.SetResourceEvent, self.handleResource) # set resource
         self.app.eventManager.registerListener(RaccoonEvents.ServerConnection, self._updateRequirementsSsh) # open connection
         #self.app.eventManager.registerListener(RaccoonEvents.UpdateJobHistory, self.updateJobTree)  # job history update
-        self.app.eventManager.registerListener(RaccoonEvents.ServiceSelected, self.updateRequirements) # docking service is selected 
+        self.app.eventManager.registerListener(RaccoonEvents.ServiceSelected, self.updateRequirements) # docking service is selected
         self.app.eventManager.registerListener(RaccoonEvents.UserInputRequirementUpdate, self.updateRequirements) # data input (lig,rec...)
         self.app.eventManager.registerListener(RaccoonEvents.SearchConfigChange, self.updateRequirements) # search config change (box)
-        self._buildjobman(self.parent)
 
-    def _buildjobman(self, target):
+    def _buildjobman(self):
         """ build the job manager tree"""
-        pgroup = Pmw.Group(target, tag_text = 'Jobs', tag_font=self.FONTbold)
+        pgroup = Pmw.Group(self.frame, tag_text = 'Jobs', tag_font=self.FONTbold)
         #tk.Button(pgroup.interior(), text='Refresh', image='self.'
         self.jobtree = RaccoonProjManTree.VSresultTree(pgroup.interior(), app = self.app, iconpath=self.iconpath)
         pgroup.pack(expand=1, fill='both', anchor='n', side='bottom')
@@ -83,7 +82,7 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
 
     def initIcons(self):
         """ initialize the icons for the interface"""
-        self.iconpath = icon_path = CADD.Raccoon2.ICONPATH 
+        self.iconpath = icon_path = CADD.Raccoon2.ICONPATH
         f = icon_path + os.sep + 'system.png'
         self._ICON_sys = ImageTk.PhotoImage(Image.open(f))
         f = icon_path + os.sep + 'submit.png'
@@ -104,6 +103,8 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self.setClusterResource()
         elif resource == 'opal':
             self.setOpalResource()
+        elif resource == 'boinc':
+            self.setBoincResource()
 
     def setLocalResource(self):
         #self.frame.pack_forget()
@@ -138,8 +139,8 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self.reqConn.grid(row=1,column=2, sticky='e')
         cb = CallbackFunction(self.switchtab, 'Setup')
         self.reqConn.bind('<Button-1>', cb)
-        
-        # XXX self.GUI_LigStatus.bind('<Button-1>', lambda x : self.notebook.selectpage('Ligands')) 
+
+        # XXX self.GUI_LigStatus.bind('<Button-1>', lambda x : self.notebook.selectpage('Ligands'))
 
         # docking service
         # ligands
@@ -179,13 +180,15 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         #self.reqSched.bind('<Button-1>', cb)
 
         # submission
-        self.SubmitButton = tk.Button(f, text = 'Submit...', image=self._ICON_submit, 
+        self.SubmitButton = tk.Button(f, text = 'Submit...', image=self._ICON_submit,
             font=self.FONT, compound='left',state='disabled', command=self.submit, **self.BORDER)
         self.SubmitButton.grid(row=20, column=1, sticky='we', columnspan=3, padx=4, pady=3)
 
         self.group.pack(fill='none',side='top', anchor='w', ipadx=5, ipady=5)
 
-        self.frame.pack(expand=0, fill='x',anchor='n')
+        self._buildjobman()
+
+        self.frame.pack(expand=1, fill='both',anchor='n')
         self._updateRequirementsSsh()
 
         #print "Raccoon GUI job manager is now on :", self.app.resource
@@ -204,6 +207,26 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self.frame.pack(expand=1, fill='both')
         #print "Raccoon GUI job manager is now on :", self.app.resource
 
+    def setBoincResource(self):
+        self.resetFrame()
+
+        self.group = Pmw.Group(self.frame, tag_text = 'New docking batch', tag_font=self.FONTbold)
+        f = self.group.interior()
+
+        self.ligLabel = tk.Label(f, text='Ligands: %s' % len(self.app.engine.LigBook))
+        self.ligLabel.pack(anchor='w', side='left',padx=1)
+        self.recLabel = tk.Label(f, text='Receptors: %s' % len(self.app.engine.RecBook))
+        self.recLabel.pack(anchor='w', side='left',padx=1)
+        self.tasksLabel = tk.Label(f, text='Tasks:')
+        self.tasksLabel = tk.Label(f, text='Tasks: %s' % (len(self.app.engine.LigBook) * len(self.app.engine.RecBook)))
+        self.tasksLabel.pack(anchor='w', side='left',padx=1)
+        self.SubmitButton = tk.Button(f, text = 'Submit', image=self._ICON_submit,
+            font=self.FONT, compound='left',state='disabled', command=self.submit, **self.BORDER)
+        self.SubmitButton.pack(anchor='w', side='left',padx=0)
+        self.group.pack(fill='x',side='top', anchor='w', ipadx=5, ipady=5)
+
+        self.frame.pack(expand=1, fill='both', anchor='n')
+
     def updateRequirements(self, event=None):
         """ update submission requirements """
         if self.app.resource == 'local':
@@ -212,7 +235,9 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self._updateRequirementsSsh(event)
         elif self.app.resource == 'opal':
             self._updateRequirementsOpal(event)
-    
+        elif self.app.resource == 'boinc':
+            self._updateRequirementsBoinc(event)
+
     def submit(self, event=None, suggest={}):
         """ find out which EVENT should be triggered and how"""
         jsub = JobSubmissionInterface(self.frame, jmanager=self.jobtree, app = self.app, suggest=suggest)
@@ -279,7 +304,7 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             return False
 
     def _updateRequirementsLocal(self, event=None):
-        """ update the check for requirements 
+        """ update the check for requirements
             of local submission
         """
         _type = event._type
@@ -287,7 +312,7 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
 
 
     def _updateRequirementsSsh(self, event=None):
-        """ update the check for requirements 
+        """ update the check for requirements
             of ssh submission
         """
         g = 'black'
@@ -319,8 +344,8 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         else:
             missing = True
             self.reqService.configure(text = d, bg = red)
-        
-        # ligand 
+
+        # ligand
         if len(self.app.ligand_source):
             libnames = ",".join([x['lib'].name() for x in self.app.ligand_source])
             t = "library selected (%s)" % libnames
@@ -354,11 +379,26 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self.SubmitButton.configure(state='normal')
 
     def _updateRequirementsOpal(self, event=None):
-        """ update the check for requirements 
+        """ update the check for requirements
             of opal submission
         """
         _type = event._type
         pass
+
+    def _updateRequirementsBoinc(self, event=None):
+        """ update the check for requirements
+            of boinc submission
+        """
+        ligCount = len(self.app.engine.LigBook)
+        recCount = len(self.app.engine.RecBook)
+        tasksCount = ligCount * recCount
+        self.ligLabel.configure(text = 'Ligands: %s' % ligCount)
+        self.recLabel.configure(text = 'Receptors: %s' % recCount)
+        self.tasksLabel.configure(text = 'Tasks: %s' % tasksCount)
+        if tasksCount > 0:
+            self.SubmitButton.configure(state = 'normal')
+        else:
+            self.SubmitButton.configure(state = 'disabled')
 
 class JobSubmissionInterface(rb.RaccoonDefaultWidget):
     """ ask for Project, Exp, VS info..."""
@@ -390,7 +430,7 @@ class JobSubmissionInterface(rb.RaccoonDefaultWidget):
             p = self.getPrj()
             e = self.getExp()
             t = self.tag_entry.getvalue().strip()
-            self.jobdata = {'prj' : p, 'exp': e, 'tag':t} 
+            self.jobdata = {'prj' : p, 'exp': e, 'tag':t}
             self.win.deactivate(self.jobdata)
         else:
             self.win.deactivate(False)
@@ -424,8 +464,8 @@ class JobSubmissionInterface(rb.RaccoonDefaultWidget):
 
 
     def checkDuplicates(self):
-        """ check that the jobs that are going to be 
-            submitted do not have the same name of 
+        """ check that the jobs that are going to be
+            submitted do not have the same name of
             already submitted jobs
         """
         m = ('The submission cannot be performed because there '
@@ -514,7 +554,7 @@ class JobSubmissionInterface(rb.RaccoonDefaultWidget):
 
         tk.Label(w, text='Select the new VS properties', font=self.FONT).grid(row=0,column=1, sticky='we', columnspan=3,padx=5,pady=5)
         tk.Frame(w,height=2,bd=1,relief='sunken').grid(row=1, column=0, sticky='ew', columnspan=3, pady=3)
-        # project 
+        # project
         tk.Label(w, text='Project', font=self.FONTbold, width=12,anchor='e').grid(row=3,column=1,sticky='we')
         tk.Label(w, text='', font=self.FONT, width=10).grid(row=4,column=1,sticky='we',pady=5) # placeholder for entry
 
@@ -523,7 +563,7 @@ class JobSubmissionInterface(rb.RaccoonDefaultWidget):
                menubutton_font=self.FONT,
                menu_font=self.FONT,
                menubutton_bd = 1, menubutton_highlightbackground = 'black',
-               menubutton_borderwidth=1, menubutton_highlightcolor='black', 
+               menubutton_borderwidth=1, menubutton_highlightcolor='black',
                menubutton_highlightthickness = 1,
                menubutton_height=1,
                items = self.prj_list,
@@ -536,7 +576,7 @@ class JobSubmissionInterface(rb.RaccoonDefaultWidget):
 
         # --------------------------------
         tk.Frame(w,height=2,bd=1,relief='sunken').grid(row=6, column=0, sticky='ew', columnspan=3, pady=3)
-        
+
         # experiment
         tk.Label(w, text='Experiment', font=self.FONTbold, width=12,anchor='e').grid(row=7,column=1,sticky='we')
         tk.Label(w, text='', font=self.FONT, width=10).grid(row=8,column=1,sticky='we',pady=5) # placeholder for entry
@@ -546,7 +586,7 @@ class JobSubmissionInterface(rb.RaccoonDefaultWidget):
                        menubutton_font=self.FONT,
                        menu_font=self.FONT,
                menubutton_bd = 1, menubutton_highlightbackground = 'black',
-               menubutton_borderwidth=1, menubutton_highlightcolor='black', 
+               menubutton_borderwidth=1, menubutton_highlightcolor='black',
                menubutton_highlightthickness = 1,
                menubutton_height=1,
                        items=[self._new],
@@ -561,7 +601,7 @@ class JobSubmissionInterface(rb.RaccoonDefaultWidget):
 
         # --------------------------------
         tk.Frame(w,height=2,bd=1,relief='sunken').grid(row=9, column=0, sticky='ew', columnspan=3, pady=3)
-        # job tag 
+        # job tag
         tk.Label(w, text='Optional jobs name tag', font=self.FONT).grid(row=10, column=1,columnspan=3,sticky='we',padx=5)
         self.tag_entry = Pmw.EntryField(w, value='', validate = hf.validateAsciiEmpty) #,
         self.tag_entry.component('entry').configure(justify='left', font=self.FONT, bg='white',width=30, **self.BORDER)
@@ -594,8 +634,8 @@ class JobSubmissionInterface(rb.RaccoonDefaultWidget):
 
 
 class ManageJobOverlaps(rb.RaccoonDefaultWidget):
-    
-    
+
+
     def __init__(self, parent, duplicates):
         rb.RaccoonDefaultWidget.__init__(self, parent)
         self.count = count
@@ -627,7 +667,7 @@ class ManageJobOverlaps(rb.RaccoonDefaultWidget):
             llb.pack(side='left', anchor='w', expand='1', fill='both')
         self.dialog.activate(globalMode=1)
 
-        
+
     def execute(self, result):
         if result == 'Overwrite':
             t = 'Overwrite jobs'
@@ -645,4 +685,4 @@ class ManageJobOverlaps(rb.RaccoonDefaultWidget):
         elif result == 'Cancel':
             choice = 'cancel'
         self.dialog.deactivate(choice)
-            
+

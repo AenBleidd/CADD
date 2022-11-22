@@ -253,6 +253,8 @@ class LigandTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self.app.engine.removeLigands([name])
             self.ligFileManager.listbox.delete(s)
         self.updateligcount()
+        e = RaccoonEvents.UserInputRequirementUpdate('lig')
+        self.app.eventManager.dispatchEvent(e)
 
     def deleteallfiles(self):
         c = len(self.app.engine.LigBook.keys())
@@ -278,6 +280,8 @@ class LigandTab(rb.TabBase, rb.RaccoonDefaultWidget):
                     lig_data['hba'], lig_data['hbd'], lig_data['mw'], lig_data['tors'],
                     atypes, lig_data['filename'])
         self.updateligcount()
+        e = RaccoonEvents.UserInputRequirementUpdate('lig')
+        self.app.eventManager.dispatchEvent(e)
 
     def _file_checker(self, flist):
         """query the Raccoon engine to check if files are acceptable

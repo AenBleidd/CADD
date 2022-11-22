@@ -888,6 +888,9 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
     def _boinc_authenticate(self):
         """ authenticate with boinc server
         """
+        if self.info_boinc_address.get() == '' or self.info_boinc_email.get() == '' or self.info_boinc_password.get() == '':
+            tmb.showerror('Error', 'Please fill in all fields')
+            return
         success, status = self.boincService.authenticate(self.info_boinc_address.get(), self.info_boinc_email.get(), self.info_boinc_password.get())
         self.info_boinc_status.set(status)
         if success:
