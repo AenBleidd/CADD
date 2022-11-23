@@ -240,6 +240,11 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
 
     def submit(self, event=None, suggest={}):
         """ find out which EVENT should be triggered and how"""
+        if self.app.resource == 'boinc':
+            self.submit_boinc()
+            self.app.setReady()
+            return
+
         jsub = JobSubmissionInterface(self.frame, jmanager=self.jobtree, app = self.app, suggest=suggest)
         job_info = jsub.getinfo()
         self.app.setBusy()
@@ -252,6 +257,8 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self.submit_cluster(job_info)
         elif self.app.resource == 'opal':
             self.submit_opal(job_info)
+        elif self.app.resource == 'boinc':
+            self.submit_boinc(job_info)
         self.app.setReady()
 
     def submit_local(self, job_info):
@@ -302,6 +309,15 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             tmb.showinfo(parent=self.frame, title=t, message=m, icon=i)
             self.app.setReady()
             return False
+
+    def submit_boinc(self):
+        for lig in self.app.engine.ligands():
+            for rec in self.app.engine.receptors():
+                json_document = self.app.engine.generateBoincTaskJson(rec, lig, self.app.dockengine, self.app.configTab)
+                if json_document == None:
+                    continue
+                print(json_document)
+
 
     def _updateRequirementsLocal(self, event=None):
         """ update the check for requirements

@@ -822,7 +822,7 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
 
     def setBoincResource(self):
         #print "setupTab> set resource gui to BOINC |",
-        self.boincService = BoincClient.BoincService()
+        self.app.boincService = BoincClient.BoincService()
         self.resetFrame()
         self._makeboincpanel()
         self.frame.pack(expand=1, fill='both')
@@ -891,7 +891,7 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
         if self.info_boinc_address.get() == '' or self.info_boinc_email.get() == '' or self.info_boinc_password.get() == '':
             tmb.showerror('Error', 'Please fill in all fields')
             return
-        success, status = self.boincService.authenticate(self.info_boinc_address.get(), self.info_boinc_email.get(), self.info_boinc_password.get())
+        success, status = self.app.boincService.authenticate(self.info_boinc_address.get(), self.info_boinc_email.get(), self.info_boinc_password.get())
         self.info_boinc_status.set(status)
         if success:
             self.app.settings['boinc']['address'] = self.info_boinc_address.get()
