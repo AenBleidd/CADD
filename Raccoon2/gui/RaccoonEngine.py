@@ -63,6 +63,9 @@ print "**** CORRECT REFERENCES TO HELPERFUNCTION ****"
 import shutil
 #import Tkinter.Photo
 import json
+from tempfile import mkstemp
+import zipfile
+from random import randint
 
 
 
@@ -2004,8 +2007,20 @@ class RaccoonEngine:
             document['num_modes'] = vina_search_parameters['num.modes']
             document['energy_range'] = vina_search_parameters['energyrange']
 
+        document['seed'] = randint(-2147483648, 2147483647)
         json_document = json.JSONEncoder().encode(document)
         return json_document
+
+    def generateBoincTaskZip(self, receptor, ligand, json_document):
+        """generate a zip file for the boinc task"""
+        zip_file_handle, zip_file_path = mkstemp()
+        os.close(zip_file_handle)
+        zip_file = zipfile.ZipFile(zip_file_path, 'w')
+        zip_file.write(self.RecBook[receptor]['filename'], os.path.basename(self.RecBook[receptor]['filename']))
+        zip_file.write(self.LigBook[ligand]['filename'], os.path.basename(self.LigBook[ligand]['filename']))
+        zip_file.writestr('task.json', json_document)
+        zip_file.close()
+        return zip_file_path
 
 if __name__ == '__main__':
 

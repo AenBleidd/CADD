@@ -316,7 +316,9 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
                 json_document = self.app.engine.generateBoincTaskJson(rec, lig, self.app.dockengine, self.app.configTab)
                 if json_document == None:
                     continue
+                zip_file_path = self.app.engine.generateBoincTaskZip(rec, lig, json_document)
                 print(json_document)
+                print(zip_file_path)
 
 
     def _updateRequirementsLocal(self, event=None):
