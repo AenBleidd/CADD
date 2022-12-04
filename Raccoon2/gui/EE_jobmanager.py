@@ -311,8 +311,37 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             return False
 
     def submit_boinc(self):
+        if self.app.boincService.isAuthenticated() == False:
+            tmb.showerror('Submission', 'You are not authenticated to the BOINC server. Please login first.')
+            return False
+        func = self._submit_batch
+        func_kwargs = {}
+        progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
+                function = func, func_kwargs = func_kwargs,
+                title ='Jobs Processing', message = "Submitting jobs to BOINC server...",
+                operation = 'submitting jobs',
+                image = None, autoclose=True, progresstype='percent')
+        progressWin.start()
+        response = progressWin.getOutput()
+        if progressWin._STOP or (not progressWin._COMPLETED):
+            return False
+        return True
+
+    def _submit_batch(self, GUI = None, stopcheck = None, showpercent=None):
+        total = len(self.app.engine.ligands()) * len(self.app.engine.receptors())
+        processed = 0
         for lig in self.app.engine.ligands():
             for rec in self.app.engine.receptors():
+                # check stop
+                if stopcheck != None and stopcheck():
+                    return False
+                # update progress
+                if showpercent != None:
+                    showpercent(hf.percent(processed, total))
+                # update GUI
+                if GUI != None:
+                    GUI.update()
+
                 json_document = self.app.engine.generateBoincTaskJson(rec, lig, self.app.dockengine, self.app.configTab)
                 if json_document == None:
                     continue
@@ -320,6 +349,7 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
                 print(json_document)
                 print(zip_file_path)
 
+                processed = processed + 1
 
     def _updateRequirementsLocal(self, event=None):
         """ update the check for requirements

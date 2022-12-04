@@ -10,6 +10,7 @@ class BoincService:
     """
 
     def __init__(self):
+        self._authenticator = None
         pass
 
     def authenticate(self, server, email, passwd):
@@ -21,6 +22,9 @@ class BoincService:
         success, result, self._authenticator = self._boincAuth(email, passwd)
 
         return success, result
+
+    def isAuthenticated(self):
+        return self._authenticator is not None
 
     def _boincAuth(self, email, passwd):
         """ authenticate the user with the BOINC service """

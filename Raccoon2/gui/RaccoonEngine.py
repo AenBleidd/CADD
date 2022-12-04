@@ -1968,8 +1968,6 @@ class RaccoonEngine:
 
     def generateBoincTaskJson(self, receptor, ligand, dockengine, config):
         """generate a json file for the boinc task"""
-        print('generateBoincTaskJson> generating task for %s %s' % (receptor, ligand))
-
         document = {}
 
         if dockengine == 'vina':
