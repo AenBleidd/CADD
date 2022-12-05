@@ -1,6 +1,8 @@
 import hashlib
 import ssl
 import StringIO
+import time
+import urllib
 import urllib2
 import xml.sax as sax
 
@@ -11,7 +13,8 @@ class BoincService:
 
     def __init__(self):
         self._authenticator = None
-        pass
+        self._appName = 'Autodock'
+        self._SUBMIT_RPC_HANDLER = 'submit_rpc_handler.php'
 
     def authenticate(self, server, email, passwd):
         """ authenticate the user with the BOINC service """
@@ -24,7 +27,58 @@ class BoincService:
         return success, result
 
     def isAuthenticated(self):
+        """ check if the user is authenticated """
         return self._authenticator is not None
+
+    def createBatch(self):
+        """ create a batch """
+        params = self._create_batch_request()
+        result, data = self._do_request(self._SUBMIT_RPC_HANDLER, self._encode_request_params(params))
+
+        if result:
+            handler = RpcCreateBatchOutHandler()
+            self._parse_xml_reply(data, handler)
+            if handler.batch_id is None:
+                return False, "Error", None
+
+            return True, "Batch created successfully", handler.batch_id
+
+        return False, "Error: " + data, None
+
+    def abortBatch(self, batch_id):
+        """ abort a batch """
+        params = self._abort_batch_request(batch_id)
+        result, data = self._do_request(self._SUBMIT_RPC_HANDLER, self._encode_request_params(params))
+
+        if result:
+            return True, "Batch aborted successfully"
+
+        return False, "Error: " + data
+
+    def retireBatch(self, batch_id):
+        """ retire a batch """
+        params = self._retire_batch_request(batch_id)
+        result, data = self._do_request(self._SUBMIT_RPC_HANDLER, self._encode_request_params(params))
+
+        if result:
+            return True, "Batch retired successfully"
+
+        return False, "Error: " + data
+
+    def queryBatches(self):
+        """ query batches """
+        params = self._query_batches_request()
+        result, data = self._do_request(self._SUBMIT_RPC_HANDLER, self._encode_request_params(params))
+
+        if result:
+            handler = RpcQueryBatchesOutHandler()
+            self._parse_xml_reply(data, handler)
+            if handler.batches is None:
+                return False, "Error", None
+
+            return True, "Batches queried successfully", handler.batches
+
+        return False, "Error: " + data, None
 
     def _boincAuth(self, email, passwd):
         """ authenticate the user with the BOINC service """
@@ -44,6 +98,54 @@ class BoincService:
             return True, "Authenticated successfully", handler.authenticator
 
         return False, "Error: " + data, None
+
+    def _create_batch_request(self, expire_time=0):
+        """ create a batch request """
+        return (
+                '<create_batch>\n'
+                '<authenticator>%s</authenticator>\n'
+                '<app_name>%s</app_name>\n'
+                '<batch_name>%s</batch_name>\n'
+                '<expire_time>%f</expire_time>\n'
+                '</create_batch>\n'
+                ) % (self._authenticator, self._appName, self._generate_unique_batch_name(), expire_time)
+
+    def _abort_batch_request(self, batch_id):
+        """ abort a batch request """
+        return (
+                '<abort_batch>\n'
+                '<authenticator>%s</authenticator>\n'
+                '<batch_id>%s</batch_id>\n'
+                '</abort_batch>\n'
+                ) % (self._authenticator, batch_id)
+
+    def _retire_batch_request(self, batch_id):
+        """ retire a batch request """
+        return (
+                '<retire_batch>\n'
+                '<authenticator>%s</authenticator>\n'
+                '<batch_id>%s</batch_id>\n'
+                '</retire_batch>\n'
+                ) % (self._authenticator, batch_id)
+
+    def _query_batches_request(self):
+        """ query batches request """
+        return (
+                '<query_batches>\n'
+                '<authenticator>%s</authenticator>\n'
+                '<get_cpu_time>%s</get_cpu_time>\n'
+                '</query_batches>\n'
+                ) % (self._authenticator, 1)
+
+    def _generate_unique_batch_name(self):
+        """ generate a unique batch name """
+        return "batch_" + self._appName + '_' + str(hashlib.md5(str(time.time())).hexdigest())
+
+    def _encode_request_params(self, params):
+        """ encode the request parameters """
+        if params is None or not params:
+            return None
+        return urllib.urlencode({'request': params})
 
     def _do_request(self, url, params):
         """ do a request to the BOINC service """
@@ -119,3 +221,85 @@ class RpcAccountOutHandler(sax.ContentHandler):
     def characters(self, content):
         if self._current == "authenticator":
             self.authenticator = content
+
+class RpcCreateBatchOutHandler(sax.ContentHandler):
+    def __init__(self):
+        self.batch_id = None
+        self.error_msg = None
+        self._current = None
+
+    def startElement(self, name, attrs):
+        self._current = name
+
+    def endElement(self, name):
+        self._current = None
+
+    def characters(self, content):
+        if self._current == "batch_id":
+            self.batch_id = content
+        elif self._current == "error_msg":
+            self.error_msg = content
+
+class RpcQueryBatchesOutHandler(sax.ContentHandler):
+    class Batch:
+        def __init__(self):
+            self.id = None
+            self.create_time = None
+            self.expire_time = None
+            self.est_completion_time = None
+            self.njobs = None
+            self.fraction_done = None
+            self.nerror_jobs = None
+            self.state = None
+            self.completion_time = None
+            self.credit_estimate = None
+            self.credit_canonical = None
+            self.name = None
+            self.app_name = None
+            self.total_cpu_time = None
+
+    def __init__(self):
+        self.batches = []
+        self._current = None
+        self._currentBatch = None
+
+    def startElement(self, name, attrs):
+        self._current = name
+        if name == 'batch':
+            self._currentBatch = self.Batch()
+
+    def endElement(self, name):
+        self._current = None
+        if name == 'batch' and self._currentBatch is not None:
+            self.batches.append(self._currentBatch)
+            self._currentBatch = None
+
+    def characters(self, content):
+        if self._current == "id":
+            self._currentBatch.id = content
+        elif self._current == "create_time":
+            self._currentBatch.create_time = content
+        elif self._current == "expire_time":
+            self._currentBatch.expire_time = content
+        elif self._current == "est_completion_time":
+            self._currentBatch.est_completion_time = content
+        elif self._current == "njobs":
+            self._currentBatch.njobs = content
+        elif self._current == "fraction_done":
+            self._currentBatch.fraction_done = content
+        elif self._current == "nerror_jobs":
+            self._currentBatch.nerror_jobs = content
+        elif self._current == "state":
+            self._currentBatch.state = content
+        elif self._current == "completion_time":
+            self._currentBatch.completion_time = content
+        elif self._current == "credit_estimate":
+            self._currentBatch.credit_estimate = content
+        elif self._current == "credit_canonical":
+            self._currentBatch.credit_canonical = content
+        elif self._current == "name":
+            self._currentBatch.name = content
+        elif self._current == "app_name":
+            self._currentBatch.app_name = content
+        elif self._current == "total_cpu_time":
+            self._currentBatch.total_cpu_time = content

@@ -39,6 +39,7 @@ import RaccoonProjManTree
 import os, Pmw
 from PmwOptionMenu import OptionMenu as OptionMenuFix
 import Tkinter as tk
+import TkTreectrl
 import tkMessageBox as tmb
 import tkFileDialog as tfd
 from PIL import Image, ImageTk
@@ -87,6 +88,12 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self._ICON_sys = ImageTk.PhotoImage(Image.open(f))
         f = icon_path + os.sep + 'submit.png'
         self._ICON_submit = ImageTk.PhotoImage(Image.open(f))
+        f = icon_path + os.sep + 'refresh.png'
+        self._ICON_refresh = ImageTk.PhotoImage(Image.open(f))
+        f = icon_path + os.sep + 'removex.png'
+        self._ICON_removex = ImageTk.PhotoImage(Image.open(f))
+        f = icon_path + os.sep + 'package.png'
+        self._ICON_package = ImageTk.PhotoImage(Image.open(f))
 
 
 
@@ -208,11 +215,13 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         #print "Raccoon GUI job manager is now on :", self.app.resource
 
     def setBoincResource(self):
+        bset = { 'bg' : '#969b9d'  } # 'width' : 22, 'height': 22, 'relief' : 'raised'}
+        bset = {}
+        bset.update(self.BORDER)
         self.resetFrame()
 
-        self.group = Pmw.Group(self.frame, tag_text = 'New docking batch', tag_font=self.FONTbold)
-        f = self.group.interior()
-
+        self.group_new_batch = Pmw.Group(self.frame, tag_text = 'New docking batch', tag_font=self.FONTbold)
+        f = self.group_new_batch.interior()
         self.ligLabel = tk.Label(f, text='Ligands: %s' % len(self.app.engine.LigBook))
         self.ligLabel.pack(anchor='w', side='left',padx=1)
         self.recLabel = tk.Label(f, text='Receptors: %s' % len(self.app.engine.RecBook))
@@ -221,9 +230,34 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self.tasksLabel = tk.Label(f, text='Tasks: %s' % (len(self.app.engine.LigBook) * len(self.app.engine.RecBook)))
         self.tasksLabel.pack(anchor='w', side='left',padx=1)
         self.SubmitButton = tk.Button(f, text = 'Submit', image=self._ICON_submit,
-            font=self.FONT, compound='left',state='disabled', command=self.submit, **self.BORDER)
+            font=self.FONT, compound='left', state='disabled', command=self.submit, **self.BORDER)
         self.SubmitButton.pack(anchor='w', side='left',padx=0)
-        self.group.pack(fill='x',side='top', anchor='w', ipadx=5, ipady=5)
+        self.group_new_batch.pack(fill='x',side='top', anchor='w', ipadx=5, ipady=5)
+
+        self.group_batches = Pmw.Group(self.frame, tag_text = 'Batches', tag_font=self.FONTbold)
+        f = self.group_batches.interior()
+
+        toolb = tk.Frame(f)
+        if self.sysarch == 'Windows':
+            bwidth = 54
+        else:
+            bwidth = 32
+        b = tk.Button(toolb, text='Refresh', compound='top', image = self._ICON_refresh, command=self.refreshBatchesBoinc, width=bwidth, font=self.FONTbold, **bset )
+        b.pack(anchor='n', side='top')
+        b = tk.Button(toolb, text='Abort', compound='top', image = self._ICON_removex, command=self.abortBatchBoinc, width=bwidth, font=self.FONTbold, **bset )
+        b.pack(anchor='n', side='top')
+        b = tk.Button(toolb, text='Retire', compound='top', image = self._ICON_package, command=self.retireBatchBoinc, width=bwidth, font=self.FONTbold, **bset )
+        b.pack(anchor='n', side='top')
+        toolb.pack(side='left', anchor='w', expand=0, fill='y',pady=0)
+
+        self.batchManager = TkTreectrl.ScrolledMultiListbox(f, bd=2)
+        self.batchManager.listbox.config(bg='white', fg='black', font=self.FONT,
+                   columns = ('id', 'state', 'done', 'jobs', 'failed jobs'),
+                   selectmode='extended',
+                              )
+        self.batchManager.pack(anchor='w', side='left', expand=1, fill='both')
+
+        self.group_batches.pack(fill='both',side='top', anchor='w', expand='1', ipadx=5, ipady=5)
 
         self.frame.pack(expand=1, fill='both', anchor='n')
 
@@ -310,24 +344,95 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self.app.setReady()
             return False
 
+    def abortBatchBoinc(self):
+        """ abort a batch of jobs on boinc """
+        sel = self.batchManager.listbox.curselection()
+        if len(sel) == 0:
+            return
+        for s in sel:
+            batch_id = self.batchManager.listbox.get(s)[0][0]
+            self._abort_batch_boinc(batch_id)
+        self.refreshBatchesBoinc()
+
+    def retireBatchBoinc(self):
+        """ retire a batch of jobs on boinc """
+        sel = self.batchManager.listbox.curselection()
+        if len(sel) == 0:
+            return
+        for s in sel:
+            batch_id = self.batchManager.listbox.get(s)[0][0]
+            self._retire_batch_boinc(batch_id)
+        self.refreshBatchesBoinc()
+
+    def refreshBatchesBoinc(self):
+        """ get the list of batches from the boinc server """
+        self.batchManager.listbox.delete(0, 'end')
+
+        if self.app.boincService.isAuthenticated() == False:
+            tmb.showerror('Submission', 'You are not authenticated to the BOINC server. Please login first.')
+            return
+
+        result, message, batches = self.app.boincService.queryBatches()
+        if result == False:
+            tmb.showerror('Submission', message)
+            return False
+
+        for batch in batches:
+            if batch.state == '0':
+                state = 'New'
+            elif batch.state == '1':
+                state = 'In progress'
+            elif batch.state == '2':
+                state = 'Completed'
+            elif batch.state == '3':
+                state = 'Aborted'
+            elif batch.state == '4':
+                state = 'Retired'
+            else:
+                state = 'Unknown'
+            done = str(float(batch.fraction_done) * 100) + '%'
+            self.batchManager.listbox.insert('END', batch.id, state, done, batch.njobs, batch.nerror_jobs)
+
     def submit_boinc(self):
         if self.app.boincService.isAuthenticated() == False:
             tmb.showerror('Submission', 'You are not authenticated to the BOINC server. Please login first.')
             return False
-        func = self._submit_batch
-        func_kwargs = {}
-        progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
-                function = func, func_kwargs = func_kwargs,
-                title ='Jobs Processing', message = "Submitting jobs to BOINC server...",
-                operation = 'submitting jobs',
-                image = None, autoclose=True, progresstype='percent')
-        progressWin.start()
-        response = progressWin.getOutput()
-        if progressWin._STOP or (not progressWin._COMPLETED):
+
+        result, message, _ = self.app.boincService.createBatch()
+        if result == False:
+            tmb.showerror('Submission', message)
+            return False
+
+        self.refreshBatchesBoinc()
+
+        # func = self._submit_batch_boinc
+        # func_kwargs = {}
+        # progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
+        #         function = func, func_kwargs = func_kwargs,
+        #         title ='Jobs Processing', message = "Submitting jobs to BOINC server...",
+        #         operation = 'submitting jobs',
+        #         image = None, autoclose=True, progresstype='percent')
+        # progressWin.start()
+        # response = progressWin.getOutput()
+        # if progressWin._STOP or (not progressWin._COMPLETED):
+        #     return False
+        return True
+
+    def _abort_batch_boinc(self, batch_id):
+        result, message = self.app.boincService.abortBatch(batch_id)
+        if result == False:
+            tmb.showerror('Submission', message)
             return False
         return True
 
-    def _submit_batch(self, GUI = None, stopcheck = None, showpercent=None):
+    def _retire_batch_boinc(self, batch_id):
+        result, message = self.app.boincService.retireBatch(batch_id)
+        if result == False:
+            tmb.showerror('Submission', message)
+            return False
+        return True
+
+    def _submit_batch_boinc(self, GUI = None, stopcheck = None, showpercent=None):
         total = len(self.app.engine.ligands()) * len(self.app.engine.receptors())
         processed = 0
         for lig in self.app.engine.ligands():
