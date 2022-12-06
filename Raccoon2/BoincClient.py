@@ -1,10 +1,13 @@
+import codecs
 import hashlib
+import mimetools
 import ssl
 import StringIO
 import time
 import urllib
 import urllib2
 import xml.sax as sax
+from io import BytesIO
 
 class BoincService:
     """ This class wrap a single BOINC service. You should have one of this class
@@ -23,7 +26,6 @@ class BoincService:
 
         self._server = server
         success, result, self._authenticator = self._boincAuth(email, passwd)
-
         return success, result
 
     def isAuthenticated(self):
@@ -79,6 +81,28 @@ class BoincService:
             return True, "Batches queried successfully", handler.batches
 
         return False, "Error: " + data, None
+
+    def uploadFile(self, batch_id, local_name, boinc_name):
+        """ upload a file """
+        upload_name = 'file_' + boinc_name
+        form = MultiPartForm()
+        form.add_field('request', self._upload_files_request(batch_id, boinc_name))
+        form.add_file(upload_name, boinc_name, local_name)
+
+        address = self._server
+        if not address.endswith("/"):
+            address += "/"
+        address += 'job_file.php'
+
+        request = urllib2.Request(address)
+        body = form.get_data()
+        request.add_header('Content-type', form.get_content_type())
+        request.add_header('Content-length', len(body))
+        request.add_data(body)
+        result, data = self._do_prepared_request(request)
+        if result:
+            return True, "File uploaded successfully"
+        return False, "Error: " + data
 
     def _boincAuth(self, email, passwd):
         """ authenticate the user with the BOINC service """
@@ -137,9 +161,19 @@ class BoincService:
                 '</query_batches>\n'
                 ) % (self._authenticator, 1)
 
+    def _upload_files_request(self, batch_id, filename):
+        """ upload files request """
+        return (
+                '<upload_files>\n'
+                '<authenticator>%s</authenticator>\n'
+                '<batch_id>%s</batch_id>\n'
+                '<phys_name>%s</phys_name>\n'
+                '</upload_files>\n'
+                ) % (self._authenticator, batch_id, filename)
+
     def _generate_unique_batch_name(self):
         """ generate a unique batch name """
-        return "batch_" + self._appName + '_' + str(hashlib.md5(str(time.time())).hexdigest())
+        return self._appName + '_' + str(hashlib.md5(str(time.time())).hexdigest())
 
     def _encode_request_params(self, params):
         """ encode the request parameters """
@@ -163,6 +197,21 @@ class BoincService:
         f = urllib2.urlopen(address, params, context=context)
         reply = f.read()
         # print(reply)
+
+        error_num, error_msg = self._check_for_error(reply)
+        if error_num is not None:
+            return False, error_msg
+
+        return True, reply
+
+    def _do_prepared_request(self, request):
+        """ do a request to the BOINC service """
+        context = ssl.create_default_context()
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
+
+        f = urllib2.urlopen(request, context=context)
+        reply = f.read()
 
         error_num, error_msg = self._check_for_error(reply)
         if error_num is not None:
@@ -303,3 +352,49 @@ class RpcQueryBatchesOutHandler(sax.ContentHandler):
             self._currentBatch.app_name = content
         elif self._current == "total_cpu_time":
             self._currentBatch.total_cpu_time = content
+
+class MultiPartForm(object):
+    """Accumulate the data to be used when posting a form."""
+    def __init__(self):
+        self.form_fields = []
+        self.files = []
+        self.boundary = mimetools.choose_boundary()
+        self._writer = codecs.lookup("utf-8")[3]
+
+    def get_content_type(self):
+        return 'multipart/form-data; boundary=%s' % self.boundary
+
+    def add_field(self, name, value):
+        """Add a simple field to the form data."""
+        self.form_fields.append((name, value))
+
+    def add_file(self, fieldname, filename, filepath):
+        """Add a file to be uploaded."""
+        fileHandle = open(filepath, 'rb')
+        body = fileHandle.read()
+        fileHandle.close()
+        mimetype = 'application/octet-stream'
+        self.files.append((fieldname, filename, mimetype, body))
+
+    def get_data(self):
+        """Return a string representing the form data, including attached files."""
+        body = BytesIO()
+        part_boundary = '--' + self.boundary
+
+        for name, value in self.form_fields:
+            body.write('%s\r\n'.encode('latin-1') % part_boundary)
+            body.write('Content-Disposition: form-data; name="%s"\r\n'.encode('latin-1') % name)
+            body.write('\r\n'.encode('latin-1'))
+            body.write('%s\r\n'.encode('latin-1') % str(value))
+            body.write(b'\r\n')
+
+        for field_name, filename, content_type, data in self.files:
+            body.write('%s\r\n'.encode('latin-1') % part_boundary)
+            body.write('Content-Disposition: form-data; name="%s"; filename="%s"\r\n'.encode('latin-1') % (str(field_name), str(filename)))
+            body.write('Content-Type: %s\r\n'.encode('latin-1') % content_type)
+            body.write('\r\n'.encode('latin-1'))
+            body.write(data)
+            body.write(b'\r\n')
+
+        body.write('%s--\r\n'.encode('latin-1') % part_boundary)
+        return body.getvalue()

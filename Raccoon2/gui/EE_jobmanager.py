@@ -46,6 +46,7 @@ from PIL import Image, ImageTk
 # mgl modules
 from mglutil.events import Event, EventHandler
 from mglutil.util.callback import CallbackFunction # as cb
+import hashlib
 
 #import EF_resultprocessor
 
@@ -252,7 +253,7 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
 
         self.batchManager = TkTreectrl.ScrolledMultiListbox(f, bd=2)
         self.batchManager.listbox.config(bg='white', fg='black', font=self.FONT,
-                   columns = ('id', 'state', 'done', 'jobs', 'failed jobs'),
+                   columns = ('id', 'name', 'state', 'done', 'jobs', 'failed jobs'),
                    selectmode='extended',
                               )
         self.batchManager.pack(anchor='w', side='left', expand=1, fill='both')
@@ -391,31 +392,31 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             else:
                 state = 'Unknown'
             done = str(float(batch.fraction_done) * 100) + '%'
-            self.batchManager.listbox.insert('END', batch.id, state, done, batch.njobs, batch.nerror_jobs)
+            self.batchManager.listbox.insert('END', batch.id, batch.name, state, done, batch.njobs, batch.nerror_jobs)
 
     def submit_boinc(self):
         if self.app.boincService.isAuthenticated() == False:
             tmb.showerror('Submission', 'You are not authenticated to the BOINC server. Please login first.')
             return False
 
-        result, message, _ = self.app.boincService.createBatch()
+        result, message, batch_id = self.app.boincService.createBatch()
         if result == False:
             tmb.showerror('Submission', message)
             return False
 
         self.refreshBatchesBoinc()
 
-        # func = self._submit_batch_boinc
-        # func_kwargs = {}
-        # progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
-        #         function = func, func_kwargs = func_kwargs,
-        #         title ='Jobs Processing', message = "Submitting jobs to BOINC server...",
-        #         operation = 'submitting jobs',
-        #         image = None, autoclose=True, progresstype='percent')
-        # progressWin.start()
-        # response = progressWin.getOutput()
-        # if progressWin._STOP or (not progressWin._COMPLETED):
-        #     return False
+        func = self._submit_batch_boinc
+        func_kwargs = { 'batch_id': batch_id }
+        progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
+                function = func, func_kwargs = func_kwargs,
+                title ='Jobs Processing', message = "Submitting jobs to BOINC server...",
+                operation = 'submitting jobs',
+                image = None, autoclose=True, progresstype='percent')
+        progressWin.start()
+        response = progressWin.getOutput()
+        if progressWin._STOP or (not progressWin._COMPLETED):
+            return False
         return True
 
     def _abort_batch_boinc(self, batch_id):
@@ -432,7 +433,7 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             return False
         return True
 
-    def _submit_batch_boinc(self, GUI = None, stopcheck = None, showpercent=None):
+    def _submit_batch_boinc(self, batch_id, GUI = None, stopcheck = None, showpercent=None):
         total = len(self.app.engine.ligands()) * len(self.app.engine.receptors())
         processed = 0
         for lig in self.app.engine.ligands():
@@ -451,10 +452,19 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
                 if json_document == None:
                     continue
                 zip_file_path = self.app.engine.generateBoincTaskZip(rec, lig, json_document)
-                print(json_document)
-                print(zip_file_path)
+                json_document_hash = str(hashlib.md5(json_document).hexdigest())
+                boinc_file_name = ('%s_%s_%s.zip') % (batch_id, processed, json_document_hash)
 
+                if not self.app.boincService.uploadFile(batch_id, zip_file_path, boinc_file_name):
+                    tmb.showerror('Submission', 'Error uploading files to BOINC server.')
+                    os.remove(zip_file_path)
+                    self._abort_batch_boinc(batch_id)
+                    self._retire_batch_boinc(batch_id)
+                    return False
+
+                # os.remove(zip_file_path)
                 processed = processed + 1
+        return True
 
     def _updateRequirementsLocal(self, event=None):
         """ update the check for requirements

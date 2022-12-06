@@ -2013,7 +2013,7 @@ class RaccoonEngine:
         """generate a zip file for the boinc task"""
         zip_file_handle, zip_file_path = mkstemp()
         os.close(zip_file_handle)
-        zip_file = zipfile.ZipFile(zip_file_path, 'w')
+        zip_file = zipfile.ZipFile(zip_file_path, 'w', compression=zipfile.ZIP_DEFLATED)
         zip_file.write(self.RecBook[receptor]['filename'], os.path.basename(self.RecBook[receptor]['filename']))
         zip_file.write(self.LigBook[ligand]['filename'], os.path.basename(self.LigBook[ligand]['filename']))
         zip_file.writestr('task.json', json_document)
