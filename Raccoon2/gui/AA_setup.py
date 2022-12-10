@@ -874,7 +874,8 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
         tk.Button(f, text='Authenticate', width=14, command=self._boinc_authenticate, compound=None, font=self.FONT, **self.BORDER).pack(anchor='w', side='left')
         self.info_boinc_status = tk.StringVar()
         self.info_boinc_status.set('Not authenticated')
-        tk.Label(f, textvariable=self.info_boinc_status, width=30, font=self.FONT).pack(anchor='w', side='left')
+        self._boinc_authenticate_label = tk.Label(f, textvariable=self.info_boinc_status, width=30, font=self.FONT, fg='red2')
+        self._boinc_authenticate_label.pack(anchor='w', side='left')
         f.pack(side = 'top', expand=0, fill='x', anchor='w',pady=4,padx=3)
 
         f1.pack(side='left', anchor='n', expand=0, fill='none')
@@ -894,9 +895,12 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
         success, status = self.app.boincService.authenticate(self.info_boinc_address.get(), self.info_boinc_email.get(), self.info_boinc_password.get())
         self.info_boinc_status.set(status)
         if success:
+            self._boinc_authenticate_label.config(fg='green3')
             self.app.settings['boinc']['address'] = self.info_boinc_address.get()
             self.app.settings['boinc']['email'] = self.info_boinc_email.get()
             self.app.saveBoincInfo()
+        else:
+            self._boinc_authenticate_label.config(fg='red2')
 
 class PasswordPromptWin(rb.RaccoonDefaultWidget, DebugObj):
     """prompt the password and show some info if necessary..."""

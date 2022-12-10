@@ -93,6 +93,8 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self._ICON_refresh = ImageTk.PhotoImage(Image.open(f))
         f = icon_path + os.sep + 'removex.png'
         self._ICON_removex = ImageTk.PhotoImage(Image.open(f))
+        f = icon_path + os.sep + 'remove.png'
+        self._ICON_remove = ImageTk.PhotoImage(Image.open(f))
         f = icon_path + os.sep + 'package.png'
         self._ICON_package = ImageTk.PhotoImage(Image.open(f))
 
@@ -231,7 +233,7 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         self.tasksLabel = tk.Label(f, text='Tasks: %s' % (len(self.app.engine.LigBook) * len(self.app.engine.RecBook)))
         self.tasksLabel.pack(anchor='w', side='left',padx=1)
         self.SubmitButton = tk.Button(f, text = 'Submit', image=self._ICON_submit,
-            font=self.FONT, compound='left', state='disabled', command=self.submit, **self.BORDER)
+            font=self.FONT, compound='left', state='disabled', command=self.submit_boinc, **self.BORDER)
         self.SubmitButton.pack(anchor='w', side='left',padx=0)
         self.group_new_batch.pack(fill='x',side='top', anchor='w', ipadx=5, ipady=5)
 
@@ -247,7 +249,9 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
         b.pack(anchor='n', side='top')
         b = tk.Button(toolb, text='Abort', compound='top', image = self._ICON_removex, command=self.abortBatchBoinc, width=bwidth, font=self.FONTbold, **bset )
         b.pack(anchor='n', side='top')
-        b = tk.Button(toolb, text='Retire', compound='top', image = self._ICON_package, command=self.retireBatchBoinc, width=bwidth, font=self.FONTbold, **bset )
+        b = tk.Button(toolb, text='Download', compound='top', image = self._ICON_package, command=self.downloadResultsBoinc, width=bwidth, font=self.FONTbold, **bset )
+        b.pack(anchor='n', side='top')
+        b = tk.Button(toolb, text='Delete', compound='top', image = self._ICON_remove, command=self.retireBatchBoinc, width=bwidth, font=self.FONTbold, **bset )
         b.pack(anchor='n', side='top')
         toolb.pack(side='left', anchor='w', expand=0, fill='y',pady=0)
 
@@ -274,12 +278,6 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self._updateRequirementsBoinc(event)
 
     def submit(self, event=None, suggest={}):
-        """ find out which EVENT should be triggered and how"""
-        if self.app.resource == 'boinc':
-            self.submit_boinc()
-            self.app.setReady()
-            return
-
         jsub = JobSubmissionInterface(self.frame, jmanager=self.jobtree, app = self.app, suggest=suggest)
         job_info = jsub.getinfo()
         self.app.setBusy()
@@ -292,8 +290,6 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self.submit_cluster(job_info)
         elif self.app.resource == 'opal':
             self.submit_opal(job_info)
-        elif self.app.resource == 'boinc':
-            self.submit_boinc(job_info)
         self.app.setReady()
 
     def submit_local(self, job_info):
@@ -347,23 +343,25 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
 
     def abortBatchBoinc(self):
         """ abort a batch of jobs on boinc """
-        sel = self.batchManager.listbox.curselection()
-        if len(sel) == 0:
-            return
-        for s in sel:
-            batch_id = self.batchManager.listbox.get(s)[0][0]
-            self._abort_batch_boinc(batch_id)
-        self.refreshBatchesBoinc()
+        if tmb.askyesno('Abort batch', 'Are you sure you want to abort the selected batch(es)?\nAll jobs in the batch(es) will be aborted.'):
+            sel = self.batchManager.listbox.curselection()
+            if len(sel) == 0:
+                return
+            for s in sel:
+                batch_id = self.batchManager.listbox.get(s)[0][0]
+                self._abort_batch_boinc(batch_id)
+            self.refreshBatchesBoinc()
 
     def retireBatchBoinc(self):
         """ retire a batch of jobs on boinc """
-        sel = self.batchManager.listbox.curselection()
-        if len(sel) == 0:
-            return
-        for s in sel:
-            batch_id = self.batchManager.listbox.get(s)[0][0]
-            self._retire_batch_boinc(batch_id)
-        self.refreshBatchesBoinc()
+        if tmb.askyesno('Delete batch', 'Are you sure you want to delete the selected batch(es)?\nAll results will be removed.'):
+            sel = self.batchManager.listbox.curselection()
+            if len(sel) == 0:
+                return
+            for s in sel:
+                batch_id = self.batchManager.listbox.get(s)[0][0]
+                self._retire_batch_boinc(batch_id)
+            self.refreshBatchesBoinc()
 
     def refreshBatchesBoinc(self):
         """ get the list of batches from the boinc server """
@@ -415,9 +413,14 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
                 image = None, autoclose=True, progresstype='percent')
         progressWin.start()
         response = progressWin.getOutput()
+        self.app.setReady()
         if progressWin._STOP or (not progressWin._COMPLETED):
             return False
         return True
+
+
+    def downloadResultsBoinc(self):
+        pass
 
     def _abort_batch_boinc(self, batch_id):
         result, message = self.app.boincService.abortBatch(batch_id)
@@ -462,7 +465,7 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
                     self._retire_batch_boinc(batch_id)
                     return False
 
-                # os.remove(zip_file_path)
+                os.remove(zip_file_path)
                 processed = processed + 1
         return True
 
