@@ -1,6 +1,7 @@
 import codecs
 import hashlib
 import mimetools
+import os
 import ssl
 import StringIO
 import time
@@ -104,6 +105,16 @@ class BoincService:
             return True, "File uploaded successfully"
         return False, "Error: " + data
 
+    def submitBatch(self, batch_id, files):
+        """ submit a batch """
+        params = self._submit_batch_request(batch_id, files)
+        result, data = self._do_request(self._SUBMIT_RPC_HANDLER, self._encode_request_params(params))
+
+        if result:
+            return True, "Batch submitted successfully"
+
+        return False, "Error: " + data
+
     def _boincAuth(self, email, passwd):
         """ authenticate the user with the BOINC service """
         passwd_hash = hashlib.md5(passwd + email.lower()).hexdigest()
@@ -170,6 +181,75 @@ class BoincService:
                 '<phys_name>%s</phys_name>\n'
                 '</upload_files>\n'
                 ) % (self._authenticator, batch_id, filename)
+
+    def _generate_input_file_template(self):
+        """ generates input file template """
+        return (
+                '<input_template>\n'
+                '<file_info>\n'
+                '</file_info>\n'
+                '<workunit>\n'
+                '<file_ref>\n'
+                '<open_name>input.zip</open_name>\n'
+                '</file_ref>\n'
+                '<target_nresults>1</target_nresults>'
+                '<min_quorum>1</min_quorum>'
+                '</workunit>\n'
+                '</input_template>\n'
+                )
+
+    def _generate_output_file_template(self, filename):
+        """ generates output file template """
+        return (
+                '<output_template>\n'
+                '<file_info>\n'
+                '<name>out_%s</name>\n'
+                '<generated_locally/>\n'
+                '</file_info>\n'
+                '<result>\n'
+                '<file_ref>\n'
+                '<file_name>out_%s</file_name>\n'
+                '<open_name>output.zip</open_name>\n'
+                '</file_ref>\n'
+                '<report_immediately/>\n'
+                '</result>\n'
+                '</output_template>\n'
+                ) % (filename, filename)
+
+    def _submit_batch_request(self, batch_id, files):
+        """ submit batch request """
+        return (
+                '<submit_batch>\n'
+                '<authenticator>%s</authenticator>\n'
+                '<batch>\n'
+                '<app_name>%s</app_name>\n'
+                '<batch_id>%s</batch_id>\n'
+                '%s'
+                '</batch>\n'
+                '</submit_batch>\n'
+                ) % (self._authenticator, self._appName, batch_id, self._generate_jobs_request(files))
+
+    def _generate_jobs_request(self, files):
+        """ generate jobs request """
+        request = ''
+        for file in files:
+            request += self._generate_job_request(file)
+        return request
+
+    def _generate_job_request(self, file):
+        """ generate job request """
+        return (
+                '<job>\n'
+                '<name>%s</name>\n'
+                '<command_line>input.zip output.zip</command_line>\n'
+                '%s'
+                '%s'
+                '<input_file>\n'
+                '<mode>local_staged</mode>\n'
+                '<source>%s</source>\n'
+                '</input_file>\n'
+                '</job>\n'
+                ) % (os.path.splitext(file)[0], self._generate_input_file_template(), self._generate_output_file_template(file), file)
 
     def _generate_unique_batch_name(self):
         """ generate a unique batch name """

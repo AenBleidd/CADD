@@ -402,8 +402,6 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             tmb.showerror('Submission', message)
             return False
 
-        self.refreshBatchesBoinc()
-
         func = self._submit_batch_boinc
         func_kwargs = { 'batch_id': batch_id }
         progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
@@ -412,10 +410,23 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
                 operation = 'submitting jobs',
                 image = None, autoclose=True, progresstype='percent')
         progressWin.start()
-        response = progressWin.getOutput()
+        files = progressWin.getOutput()
         self.app.setReady()
         if progressWin._STOP or (not progressWin._COMPLETED):
+            self._abort_batch_boinc(batch_id)
+            self._retire_batch_boinc(batch_id)
             return False
+
+        result, message = self.app.boincService.submitBatch(batch_id, files)
+        if result == False:
+            self._abort_batch_boinc(batch_id)
+            self._retire_batch_boinc(batch_id)
+            tmb.showerror('Submission', message)
+            return False
+
+        tmb.showinfo('Submission', 'Jobs submitted successfully.')
+        self.refreshBatchesBoinc()
+
         return True
 
 
@@ -439,11 +450,12 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
     def _submit_batch_boinc(self, batch_id, GUI = None, stopcheck = None, showpercent=None):
         total = len(self.app.engine.ligands()) * len(self.app.engine.receptors())
         processed = 0
+        processed_files = []
         for lig in self.app.engine.ligands():
             for rec in self.app.engine.receptors():
                 # check stop
                 if stopcheck != None and stopcheck():
-                    return False
+                    return None
                 # update progress
                 if showpercent != None:
                     showpercent(hf.percent(processed, total))
@@ -457,17 +469,16 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
                 zip_file_path = self.app.engine.generateBoincTaskZip(rec, lig, json_document)
                 json_document_hash = str(hashlib.md5(json_document).hexdigest())
                 boinc_file_name = ('%s_%s_%s.zip') % (batch_id, processed, json_document_hash)
+                processed_files.append(boinc_file_name)
 
                 if not self.app.boincService.uploadFile(batch_id, zip_file_path, boinc_file_name):
                     tmb.showerror('Submission', 'Error uploading files to BOINC server.')
                     os.remove(zip_file_path)
-                    self._abort_batch_boinc(batch_id)
-                    self._retire_batch_boinc(batch_id)
-                    return False
+                    return None
 
                 os.remove(zip_file_path)
                 processed = processed + 1
-        return True
+        return processed_files
 
     def _updateRequirementsLocal(self, event=None):
         """ update the check for requirements
