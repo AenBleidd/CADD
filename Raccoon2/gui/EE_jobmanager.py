@@ -393,35 +393,21 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self.batchManager.listbox.insert('END', batch.id, batch.name, state, done, batch.njobs, batch.nerror_jobs)
 
     def submit_boinc(self):
+        """ submit a batch of jobs to the boinc server"""
         if self.app.boincService.isAuthenticated() == False:
             tmb.showerror('Submission', 'You are not authenticated to the BOINC server. Please login first.')
             return False
 
-        result, message, batch_id = self.app.boincService.createBatch()
-        if result == False:
-            tmb.showerror('Submission', message)
-            return False
-
         func = self._submit_batch_boinc
-        func_kwargs = { 'batch_id': batch_id }
+        func_kwargs = { }
         progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
                 function = func, func_kwargs = func_kwargs,
                 title ='Jobs Processing', message = "Submitting jobs to BOINC server...",
                 operation = 'submitting jobs',
                 image = None, autoclose=True, progresstype='percent')
         progressWin.start()
-        files = progressWin.getOutput()
         self.app.setReady()
-        if progressWin._STOP or (not progressWin._COMPLETED):
-            self._abort_batch_boinc(batch_id)
-            self._retire_batch_boinc(batch_id)
-            return False
-
-        result, message = self.app.boincService.submitBatch(batch_id, files)
-        if result == False:
-            self._abort_batch_boinc(batch_id)
-            self._retire_batch_boinc(batch_id)
-            tmb.showerror('Submission', message)
+        if progressWin._STOP or (not progressWin._COMPLETED) or progressWin.getOutput() == False:
             return False
 
         tmb.showinfo('Submission', 'Jobs submitted successfully.')
@@ -429,9 +415,27 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
 
         return True
 
-
     def downloadResultsBoinc(self):
-        pass
+        """ download the results of a batch of jobs from the boinc server"""
+        if not tmb.askyesno('Download', 'Are you sure you want to download results of the selected batch(es)?'):
+            return
+        outdir = tfd.askdirectory(parent=self.frame, title='Select a directory to save the results')
+        if not outdir:
+            return
+
+        sel = self.batchManager.listbox.curselection()
+        if len(sel) == 0:
+            return
+        for s in sel:
+            batch_id = self.batchManager.listbox.get(s)[0][0]
+            self._download_results_boinc(batch_id, outdir)
+
+    def _download_results_boinc(self, batch_id, outdir):
+        result, message = self.app.boincService.downloadResults(batch_id, outdir)
+        if result == False:
+            tmb.showerror('Download', message)
+            return False
+        return True
 
     def _abort_batch_boinc(self, batch_id):
         result, message = self.app.boincService.abortBatch(batch_id)
@@ -447,18 +451,28 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             return False
         return True
 
-    def _submit_batch_boinc(self, batch_id, GUI = None, stopcheck = None, showpercent=None):
-        total = len(self.app.engine.ligands()) * len(self.app.engine.receptors())
+    def _submit_batch_boinc(self, GUI = None, stopcheck = None, showpercent=None):
+        total = 2 + len(self.app.engine.ligands()) * len(self.app.engine.receptors())
+
+        result, message, batch_id = self.app.boincService.createBatch()
+        if result == False:
+            tmb.showerror('Submission', message)
+            return False
+
+        # update progress
+        if showpercent != None:
+            showpercent(hf.percent(1, total))
+
         processed = 0
         processed_files = []
-        for lig in self.app.engine.ligands():
-            for rec in self.app.engine.receptors():
+        for rec in self.app.engine.receptors():
+            for lig in self.app.engine.ligands():
                 # check stop
                 if stopcheck != None and stopcheck():
-                    return None
+                    return False
                 # update progress
                 if showpercent != None:
-                    showpercent(hf.percent(processed, total))
+                    showpercent(hf.percent(processed + 1, total))
                 # update GUI
                 if GUI != None:
                     GUI.update()
@@ -474,11 +488,29 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
                 if not self.app.boincService.uploadFile(batch_id, zip_file_path, boinc_file_name):
                     tmb.showerror('Submission', 'Error uploading files to BOINC server.')
                     os.remove(zip_file_path)
-                    return None
+                    self._abort_batch_boinc(batch_id)
+                    self._retire_batch_boinc(batch_id)
+                    return False
 
                 os.remove(zip_file_path)
                 processed = processed + 1
-        return processed_files
+
+        # update progress
+        if showpercent != None:
+            showpercent(hf.percent(processed + 1, total))
+
+        result, message = self.app.boincService.submitBatch(batch_id, processed_files)
+        if result == False:
+            self._abort_batch_boinc(batch_id)
+            self._retire_batch_boinc(batch_id)
+            tmb.showerror('Submission', message)
+            return False
+
+        # update progress
+        if showpercent != None:
+            showpercent(hf.percent(total, total))
+
+        return True
 
     def _updateRequirementsLocal(self, event=None):
         """ update the check for requirements

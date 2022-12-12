@@ -23,7 +23,7 @@ class BoincService:
     def authenticate(self, server, email, passwd):
         """ authenticate the user with the BOINC service """
         if server is None or not server or email is None or not email or passwd is None or not passwd:
-            return "ERROR"
+            return 'ERROR'
 
         self._server = server
         success, result, self._authenticator = self._boincAuth(email, passwd)
@@ -42,11 +42,11 @@ class BoincService:
             handler = RpcCreateBatchOutHandler()
             self._parse_xml_reply(data, handler)
             if handler.batch_id is None:
-                return False, "Error", None
+                return False, 'Error', None
 
-            return True, "Batch created successfully", handler.batch_id
+            return True, 'Batch created successfully', handler.batch_id
 
-        return False, "Error: " + data, None
+        return False, 'Error: ' + data, None
 
     def abortBatch(self, batch_id):
         """ abort a batch """
@@ -54,9 +54,9 @@ class BoincService:
         result, data = self._do_request(self._SUBMIT_RPC_HANDLER, self._encode_request_params(params))
 
         if result:
-            return True, "Batch aborted successfully"
+            return True, 'Batch aborted successfully'
 
-        return False, "Error: " + data
+        return False, 'Error: ' + data
 
     def retireBatch(self, batch_id):
         """ retire a batch """
@@ -64,9 +64,9 @@ class BoincService:
         result, data = self._do_request(self._SUBMIT_RPC_HANDLER, self._encode_request_params(params))
 
         if result:
-            return True, "Batch retired successfully"
+            return True, 'Batch retired successfully'
 
-        return False, "Error: " + data
+        return False, 'Error: ' + data
 
     def queryBatches(self):
         """ query batches """
@@ -77,11 +77,11 @@ class BoincService:
             handler = RpcQueryBatchesOutHandler()
             self._parse_xml_reply(data, handler)
             if handler.batches is None:
-                return False, "Error", None
+                return False, 'Error', None
 
-            return True, "Batches queried successfully", handler.batches
+            return True, 'Batches queried successfully', handler.batches
 
-        return False, "Error: " + data, None
+        return False, 'Error: ' + data, None
 
     def uploadFile(self, batch_id, local_name, boinc_name):
         """ upload a file """
@@ -102,8 +102,8 @@ class BoincService:
         request.add_data(body)
         result, data = self._do_prepared_request(request)
         if result:
-            return True, "File uploaded successfully"
-        return False, "Error: " + data
+            return True, 'File uploaded successfully'
+        return False, 'Error: ' + data
 
     def submitBatch(self, batch_id, files):
         """ submit a batch """
@@ -111,16 +111,21 @@ class BoincService:
         result, data = self._do_request(self._SUBMIT_RPC_HANDLER, self._encode_request_params(params))
 
         if result:
-            return True, "Batch submitted successfully"
+            return True, 'Batch submitted successfully'
 
-        return False, "Error: " + data
+        return False, 'Error: ' + data
+
+    def downloadResults(self, batch_id, outdir):
+        """ download the results of a batch """
+        success, result, data = self._download_results(batch_id)
+        return success, result
 
     def _boincAuth(self, email, passwd):
         """ authenticate the user with the BOINC service """
         passwd_hash = hashlib.md5(passwd + email.lower()).hexdigest()
         quoted_email = urllib2.quote(email)
-        url = "lookup_account.php"
-        params = "?email_addr=" + quoted_email + "&passwd_hash=" + passwd_hash
+        url = 'lookup_account.php'
+        params = '?email_addr=%s&passwd_hash=%s' % (quoted_email, passwd_hash)
 
         result, data = self._do_request(url+params, None)
 
@@ -128,11 +133,26 @@ class BoincService:
             handler = RpcAccountOutHandler()
             self._parse_xml_reply(data, handler)
             if handler.authenticator is None:
-                return False, "Error", None
+                return False, 'Error', None
 
-            return True, "Authenticated successfully", handler.authenticator
+            return True, 'Authenticated successfully', handler.authenticator
 
-        return False, "Error: " + data, None
+        return False, 'Error: ' + data, None
+
+    def _download_results(self, batch_id):
+        """ download the results of a batch """
+        auth_hash = hashlib.md5(self._authenticator+str(batch_id)).hexdigest()
+        url = 'get_output.php'
+        request = '?cmd=batch_files&batch_id=%s&auth_str=%s' % (batch_id, auth_hash)
+
+        result, data = self._do_request(url+request, None)
+
+        print(data)
+
+        if result:
+            return True, 'Results downloaded successfully', data
+
+        return False, 'Error: ' + data, None
 
     def _create_batch_request(self, expire_time=0):
         """ create a batch request """
@@ -268,21 +288,8 @@ class BoincService:
             address += "/"
         address += url
 
-        # print("URL:" + address)
-
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-
-        f = urllib2.urlopen(address, params, context=context)
-        reply = f.read()
-        # print(reply)
-
-        error_num, error_msg = self._check_for_error(reply)
-        if error_num is not None:
-            return False, error_msg
-
-        return True, reply
+        request = urllib2.Request(address, params)
+        return self._do_prepared_request(request)
 
     def _do_prepared_request(self, request):
         """ do a request to the BOINC service """
@@ -301,8 +308,8 @@ class BoincService:
 
     def _check_for_error(self, reply):
         """ check if the reply contains an error """
-        if reply is None or not reply:
-            return None
+        if reply is None or not reply or len(reply) == 0:
+            return 'NO_DATA', 'No data sent from BOINC service'
 
         error_handler = RpcErrorHandler()
         self._parse_xml_reply(reply, error_handler)
