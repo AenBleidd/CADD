@@ -225,6 +225,7 @@ class BoincService:
                 '<file_info>\n'
                 '<name>out_%s</name>\n'
                 '<generated_locally/>\n'
+                '<max_nbytes>10485760</max_nbytes>'
                 '</file_info>\n'
                 '<result>\n'
                 '<file_ref>\n'

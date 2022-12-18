@@ -1988,22 +1988,32 @@ class RaccoonEngine:
         if self.gridBox()['center'] is None:
             print "ERROR: no grid box center defined"
             return None
-        document['center_x'] = self.gridBox()['center'][0]
-        document['center_y'] = self.gridBox()['center'][1]
-        document['center_z'] = self.gridBox()['center'][2]
+
+        if self.gridBox()['center'][0] is not None:
+            document['center_x'] = self.gridBox()['center'][0]
+        if self.gridBox()['center'][1] is not None:
+            document['center_y'] = self.gridBox()['center'][1]
+        if self.gridBox()['center'][2] is not None:
+            document['center_z'] = self.gridBox()['center'][2]
 
         if self.gridBox()['size'] is None:
             print "ERROR: no grid box size defined"
             return None
-        document['size_x'] = self.gridBox()['size'][0]
-        document['size_y'] = self.gridBox()['size'][1]
-        document['size_z'] = self.gridBox()['size'][2]
+        if self.gridBox()['size'][0] is not None:
+            document['size_x'] = self.gridBox()['size'][0]
+        if self.gridBox()['size'][1] is not None:
+            document['size_y'] = self.gridBox()['size'][1]
+        if self.gridBox()['size'][2] is not None:
+            document['size_z'] = self.gridBox()['size'][2]
 
         vina_search_parameters = config.getSearchParmVina()
         if vina_search_parameters:
-            document['exhaustiveness'] = vina_search_parameters['exhaustiveness']
-            document['num_modes'] = vina_search_parameters['num.modes']
-            document['energy_range'] = vina_search_parameters['energyrange']
+            if vina_search_parameters['exhaustiveness'] is not None:
+                document['exhaustiveness'] = vina_search_parameters['exhaustiveness']
+            if vina_search_parameters['num.modes'] is not None:
+                document['num_modes'] = vina_search_parameters['num.modes']
+            if vina_search_parameters['energyrange'] is not None:
+                document['energy_range'] = vina_search_parameters['energyrange']
 
         document['seed'] = randint(-2147483648, 2147483647)
         json_document = json.JSONEncoder().encode(document)
