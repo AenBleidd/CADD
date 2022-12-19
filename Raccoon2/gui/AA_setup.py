@@ -45,6 +45,7 @@ import tkMessageBox as tmb
 import tkFileDialog as tfd
 import platform
 import paramiko as pmk
+import webbrowser
 import CADD.Raccoon2.BoincClient as BoincClient
 try:
     from multiprocessing import cpu_count
@@ -880,6 +881,24 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
 
         f1.pack(side='left', anchor='n', expand=0, fill='none')
 
+        # right top frame
+        f2 = tk.Frame(g)
+
+        # info
+        f = tk.Frame(f2)
+        boinc_info = 'BOINC is a platform for distributed high throughput computing, i.e. large numbers of independent compute-intensive jobs, where there performance goal is high rate of job completion rather than low turnaround time of individual jobs. It also offers low-level mechanisms for distributed data storage. BOINC has a client/server architecture: the server distributes jobs, while the client runs on worker nodes, which execute jobs.\n'
+        nodes_info = 'The worker nodes are consumer devices (desktop and laptop computers, tablets, smartphones) volunteered by their owners. BOINC addresses the various challenges inherent in this environment (heterogeneity, host churn and unreliability, scale, security, and so on). There are a number of volunteer-computing BOINC projects such as SETI@home, LHC@home, World Community Grid, and so on. The BOINC client can be "attached" to one or many of these; it processes jobs for the projects to which it is attached.\n'
+        license_info = 'BOINC is distributed under the LGPL v3 open-source license. It can be used for any purpose (academic, commercial, or private) and can be used with applications that are not open-source.'
+        tk.Message(f, text=boinc_info+nodes_info+license_info, anchor='e', font=self.FONT).pack(anchor='w', side='left', expand=1, fill='x')
+        f.pack(side = 'top', expand=1, fill='both', anchor='w',pady=4,padx=3)
+
+        #register
+        f = tk.Frame(f2)
+        tk.Button(f, text='Register', width=14, command=self._boinc_register, compound=None, font=self.FONT, **self.BORDER).pack(anchor='w', side='left')
+        f.pack(side = 'top', expand=0, fill='x', anchor='w',pady=4,padx=3)
+
+        f2.pack(side='left', anchor='n', expand=1, fill='none')
+
         # bottom frame
         group.pack(expand=1, fill='both',anchor='center', side='top',padx=5, pady=5)
 
@@ -901,6 +920,17 @@ class SetupTab(rb.TabBase, rb.RaccoonDefaultWidget):
             self.app.saveBoincInfo()
         else:
             self._boinc_authenticate_label.config(fg='red2')
+
+    def _boinc_register(self):
+        """ register with boinc server
+        """
+        address = self.info_boinc_address.get()
+        if address == '' or address is None:
+            address = 'https://boinc.berkeley.edu/central/'
+        if not address.endswith('/'):
+            address += '/'
+        url = address + 'signup.php'
+        webbrowser.open(url, new=0, autoraise=True)
 
 class PasswordPromptWin(rb.RaccoonDefaultWidget, DebugObj):
     """prompt the password and show some info if necessary..."""
