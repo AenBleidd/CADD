@@ -212,8 +212,8 @@ class BoincService:
                 '<file_ref>\n'
                 '<open_name>input.zip</open_name>\n'
                 '</file_ref>\n'
-                '<target_nresults>1</target_nresults>'
-                '<min_quorum>1</min_quorum>'
+                '<target_nresults>2</target_nresults>'
+                '<min_quorum>2</min_quorum>'
                 '</workunit>\n'
                 '</input_template>\n'
                 )

@@ -2016,6 +2016,7 @@ class RaccoonEngine:
                 document['energy_range'] = vina_search_parameters['energyrange']
 
         document['seed'] = randint(-2147483648, 2147483647)
+        document['out'] = '%s_%s_out.pdbqt' % (rec_data['name'], lig_data['name'])
         json_document = json.JSONEncoder().encode(document)
         return json_document
 
