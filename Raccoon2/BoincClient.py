@@ -118,6 +118,14 @@ class BoincService:
     def downloadResults(self, batch_id, outdir):
         """ download the results of a batch """
         success, result, data = self._download_results(batch_id)
+
+        if success:
+            filename = os.path.join(outdir, 'boinc_%s_results.zip' % batch_id)
+            results_file = open(filename, 'wb')
+            results_file.write(data)
+            results_file.close()
+            result = filename
+
         return success, result
 
     def _boincAuth(self, email, passwd):
@@ -146,8 +154,6 @@ class BoincService:
         request = '?cmd=batch_files&batch_id=%s&auth_str=%s' % (batch_id, auth_hash)
 
         result, data = self._do_request(url+request, None)
-
-        print(data)
 
         if result:
             return True, 'Results downloaded successfully', data
@@ -226,6 +232,7 @@ class BoincService:
                 '<name>out_%s</name>\n'
                 '<generated_locally/>\n'
                 '<max_nbytes>10485760</max_nbytes>'
+                '<url><UPLOAD_URL/></url>'
                 '</file_info>\n'
                 '<result>\n'
                 '<file_ref>\n'
@@ -324,7 +331,10 @@ class BoincService:
 
         parser = sax.make_parser()
         parser.setContentHandler(handler)
-        parser.parse(StringIO.StringIO(reply))
+        try:
+            parser.parse(StringIO.StringIO(reply))
+        except sax.SAXParseException:
+            return
 
 class RpcErrorHandler(sax.ContentHandler):
     def __init__(self):

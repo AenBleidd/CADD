@@ -47,6 +47,8 @@ from PIL import Image, ImageTk
 from mglutil.events import Event, EventHandler
 from mglutil.util.callback import CallbackFunction # as cb
 import hashlib
+import zipfile
+import StringIO
 
 #import EF_resultprocessor
 
@@ -428,14 +430,65 @@ class JobManagerTab(rb.TabBase, rb.RaccoonDefaultWidget):
             return
         for s in sel:
             batch_id = self.batchManager.listbox.get(s)[0][0]
-            self._download_results_boinc(batch_id, outdir)
 
-    def _download_results_boinc(self, batch_id, outdir):
+            func = self._download_results_boinc
+            func_kwargs = { 'batch_id':batch_id, 'outdir':outdir }
+            progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
+                    function = func, func_kwargs = func_kwargs,
+                    title ='Results Downloading', message = "Downloading results from the BOINC server...",
+                    operation = 'downloading results',
+                    image = None, autoclose=True, progresstype=None)
+            progressWin.start()
+            self.app.setReady()
+            if progressWin._STOP or (not progressWin._COMPLETED) or progressWin.getOutput() == False:
+                return False
+
+            zipfilename = progressWin.getOutput()
+            func = self._unzip_results_boinc
+            func_kwargs = { 'zipfilename':zipfilename, 'outdir':outdir }
+            progressWin = rb.ProgressDialogWindowTk(parent = self.frame,
+                    function = func, func_kwargs = func_kwargs,
+                    title ='Results Unzipping', message = "Unzipping downloaded results...",
+                    operation = 'unzipping results',
+                    image = None, autoclose=True, progresstype='percent')
+            progressWin.start()
+            self.app.setReady()
+            if progressWin._STOP or (not progressWin._COMPLETED) or progressWin.getOutput() == False:
+                return False
+
+            os.remove(zipfilename)
+            tmb.showinfo('Download', 'Results downloaded successfully.')
+
+    def _unzip_results_boinc(self, zipfilename, outdir, GUI = None, stopcheck = None, showpercent=None):
+        """ unzip the results of a batch of jobs """
+        zip_file = zipfile.ZipFile(zipfilename)
+        namelist = zip_file.namelist()
+        total = len(namelist)
+        processed = 0
+        for name in namelist:
+            if stopcheck != None and stopcheck():
+                zip_file.close()
+                return False
+            if showpercent != None:
+                showpercent(hf.percent(processed, total))
+            if GUI != None:
+                GUI.update()
+            buff = zip_file.read(name)
+            sub_zip_file = zipfile.ZipFile(StringIO.StringIO(buff))
+            sub_zip_file.extractall(outdir)
+            sub_zip_file.close()
+            processed += 1
+        zip_file.close()
+        if showpercent != None:
+                showpercent(hf.percent(total, total))
+        return True
+
+    def _download_results_boinc(self, batch_id, outdir, GUI = None, stopcheck = None, showpercent=None):
         result, message = self.app.boincService.downloadResults(batch_id, outdir)
         if result == False:
             tmb.showerror('Download', message)
             return False
-        return True
+        return message
 
     def _abort_batch_boinc(self, batch_id):
         result, message = self.app.boincService.abortBatch(batch_id)
